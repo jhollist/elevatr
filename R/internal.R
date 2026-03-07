@@ -41,40 +41,38 @@ get_tilexy <- function(bbx,z){
 #' @keywords internal
 loc_check <- function(locations, prj = NULL){
  
-  if(is.null(nrow(locations))){
-    nfeature <- length(locations) 
-  } else {
-    nfeature <- nrow(locations)
-  }
   
   if(all(class(locations)=="data.frame")){ 
-    if(is.null(prj) & !any(class(locations) %in% c("sf", "sfc", "sfg"))){
-      stop("Please supply a valid sf crs via locations or prj.")
-    }
-    
+    if(is.null(prj)) { # & !any(class(locations) %in% c("sf", "sfc", "sfg"))){
+      stop("Please supply a valid sf crs via argument 'prj'.")
+    }    
     locations <- sf::st_as_sf(x = locations, coords = c("x", "y"), crs = prj)
-    locations$elevation <- vector("numeric", nfeature)
     
   } else if(any(class(locations) %in% c("sf", "sfc", "sfg"))){
     
     sf_crs <- sf::st_crs(locations)
-    locations$elevation <- vector("numeric", nfeature)
     
     if((is.null(sf_crs) | is.na(sf_crs)) & is.null(prj)){
-      stop("Please supply an sf object with a valid crs.")
+      stop("Please supply an sf object with a valid crs, or supply a crs with argument 'prj'.")
     }
     
   } else if(any(class(locations) %in% c("SpatRaster", "SpatVector"))){
     
+    locations <- sf::st_as_sf(terra::as.points(locations, values = FALSE))
     sf_crs <- sf::st_crs(locations)
-    locations <- sf::st_as_sf(terra::as.points(locations, values = FALSE), 
-                              coords = terra::crds(locations, df = TRUE),
-                              crs = sf_crs)
-    locations$elevation <- vector("numeric", nrow(locations))
     if((is.null(sf_crs) | is.na(sf_crs)) & is.null(prj)){
-      stop("Please supply a valid sf crs via locations or prj.")
+      stop("Please supply a SpatRaster/Vector with a valid crs, or supply a crs with argument 'prj'.")
     }
+  } else if(inherits(locations, "SpatExtent")) {
+	if (is.null(prj)) {
+		# you could warn, but that seems unnecessary, lonlat is the only reasonable crs in this case 
+		# warn("assuming extent has longitude/latitude crs")
+		prj <- sf::st_crs(4326)
+	}
+    locations <- sf::st_as_sf(terra::as.points(locations))
+	sf::st_crs(locations) <- prj
   }
+  locations$elevation <- 0 
 
   #check for long>180
   if(is.null(prj)){
